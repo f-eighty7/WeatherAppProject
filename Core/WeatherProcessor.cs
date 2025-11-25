@@ -1,44 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace Core
+﻿namespace Core
 {
 	public class WeatherProcessor
 	{
-		// --- TEMPERATUR ---
+		// --- G-NIVÅ: TEMPERATUR ---
 
+		// Beräknar medeltemperatur för ett specifikt datum och plats.
+		// Returnerar null om ingen data finns för det datumet.
 		public double? AverageTemperatureForDate(List<WeatherData> weatherData, DateTime date, string plats)
 		{
-			// Filtrerar ut mätvärden för angiven plats och datum.
 			var selectedData = weatherData
 				.Where(w => w.Plats == plats && w.Datum.Date == date.Date)
 				.ToList();
 
-			// Returnerar null om ingen data hittas för att undvika felaktiga nollvärden.
 			if (!selectedData.Any()) return null;
 
-			// Beräknar och returnerar medelvärdet.
 			return selectedData.Average(w => w.Temp);
 		}
 
+		// Sorterar dagar från varmast till kallast baserat på dygnsmedeltemperatur.
 		public List<(DateTime Date, double AvgTemp)> SortDaysByTemperature(List<WeatherData> weatherData, string plats)
 		{
 			return weatherData
 				.Where(w => w.Plats == plats)
-				.GroupBy(w => w.Datum.Date) // Grupperar alla mätvärden per dag.
+				.GroupBy(w => w.Datum.Date) // Grupperar alla mätpunkter per dag
 				.Select(g => new
 				{
 					Date = g.Key,
-					AvgTemp = g.Average(w => w.Temp) // Beräknar dygnsmedeltemperaturen.
+					AvgTemp = g.Average(w => w.Temp) // Räknar ut snittet för dagen
 				})
-				.OrderByDescending(x => x.AvgTemp) // Sorterar från varmast till kallast.
+				.OrderByDescending(x => x.AvgTemp) // Sorterar fallande (högst först)
 				.Select(x => (x.Date, x.AvgTemp))
 				.ToList();
 		}
 
-		// --- LUFTFUKTIGHET ---
+		// --- G-NIVÅ: LUFTFUKTIGHET ---
 
+		// Sorterar dagar från torrast till fuktigast baserat på dygnsmedelluftfuktighet.
 		public List<(DateTime Date, double AvgHumidity)> SortDaysByHumidity(List<WeatherData> weatherData, string plats)
 		{
 			return weatherData
@@ -47,15 +44,16 @@ namespace Core
 				.Select(g => new
 				{
 					Date = g.Key,
-					AvgHumidity = g.Average(w => w.Luftfuktighet) // Beräknar dygnsmedelluftfuktighet.
+					AvgHumidity = g.Average(w => w.Luftfuktighet) // Räknar ut snittet för dagen
 				})
-				.OrderBy(x => x.AvgHumidity) // Sorterar från lägst (torrast) till högst fuktighet.
+				.OrderBy(x => x.AvgHumidity) // Sorterar stigande (lägst först)
 				.Select(x => (x.Date, x.AvgHumidity))
 				.ToList();
 		}
 
-		// --- MÖGELRISK ---
+		// --- G-NIVÅ: MÖGELRISK ---
 
+		// Beräknar ett riskindex för mögel per dag och sorterar från minst till störst risk.
 		public List<(DateTime Date, double MoldRisk)> SortDaysByMoldRisk(List<WeatherData> weatherData, string plats)
 		{
 			return weatherData
@@ -64,37 +62,38 @@ namespace Core
 				.Select(g => new
 				{
 					Date = g.Key,
-					// Hämtar dygnsmedelvärden för både temperatur och fuktighet.
+					// Hämtar dygnsmedel för både temperatur och fuktighet
 					AvgTemp = g.Average(w => w.Temp),
 					AvgHumidity = g.Average(w => w.Luftfuktighet)
 				})
 				.Select(x => new
 				{
 					x.Date,
-					// Använder hjälpmetoden för att beräkna riskindex för varje dag.
+					// Använder hjälpmetoden för att beräkna riskindexet
 					Risk = CalculateMoldIndex(x.AvgTemp, x.AvgHumidity)
 				})
-				.OrderBy(x => x.Risk) // Sorterar från lägst risk (0) till högst.
+				.OrderBy(x => x.Risk) // Sorterar stigande (minst risk först)
 				.Select(x => (x.Date, x.Risk))
 				.ToList();
 		}
 
-		// Hjälpmetod som applicerar en förenklad formel för mögelrisk.
+		// Hjälpmetod: Beräknar mögelrisk baserat på temperatur och fuktighet.
+		// Formeln är förenklad: ((Fukt - 78) * (Temp / 15)).
+		// Ingen risk om det är minusgrader eller luftfuktighet under 78%.
 		private double CalculateMoldIndex(double temp, double humidity)
 		{
-			// Mögel växer inte effektivt vid minusgrader eller låg luftfuktighet.
 			if (temp < 0 || humidity < 78) return 0;
 
-			// Beräknar ett index där högre värme och fukt ger högre risk.
 			double risk = ((humidity - 78) * (temp / 15));
 			return risk < 0 ? 0 : risk;
 		}
 
-		// --- METEOROLOGISKA ÅRSTIDER ---
+		// --- G-NIVÅ: METEOROLOGISKA ÅRSTIDER ---
 
+		// Letar efter första dagen i en sekvens av 5 dagar där temperaturen är under 10 grader (Höst).
 		public DateTime? FindMeteorologicalAutumn(List<WeatherData> weatherData)
 		{
-			// Förbereder dygnsmedelvärden sorterade i datumordning.
+			// Förbereder en lista med dygnsmedelvärden (Ute) sorterad på datum.
 			var dailyTemps = weatherData
 				.Where(w => w.Plats == "Ute")
 				.GroupBy(w => w.Datum.Date)
@@ -102,26 +101,24 @@ namespace Core
 				.OrderBy(x => x.Date)
 				.ToList();
 
-			// Letar efter en sekvens på 5 dagar i rad.
+			// Loopar igenom dagarna för att hitta 5 dagar i rad som uppfyller kravet.
 			for (int i = 0; i <= dailyTemps.Count - 5; i++)
 			{
 				bool isAutumn = true;
-				// Kontrollerar om alla 5 dagar i sekvensen är under 10 grader.
 				for (int j = 0; j < 5; j++)
 				{
 					if (dailyTemps[i + j].AvgTemp >= 10.0)
 					{
 						isAutumn = false;
-						break; // Bryter inre loopen om villkoret inte uppfylls.
+						break; // Avbryter inre loopen om en dag bryter sekvensen.
 					}
 				}
-
-				// Om villkoret höll för hela sekvensen, returneras startdatumet.
-				if (isAutumn) return dailyTemps[i].Date;
+				if (isAutumn) return dailyTemps[i].Date; // Returnerar startdatumet för hösten.
 			}
 			return null;
 		}
 
+		// Letar efter första dagen i en sekvens av 5 dagar där temperaturen är 0 grader eller lägre (Vinter).
 		public DateTime? FindMeteorologicalWinter(List<WeatherData> weatherData)
 		{
 			var dailyTemps = weatherData
@@ -134,7 +131,6 @@ namespace Core
 			for (int i = 0; i <= dailyTemps.Count - 5; i++)
 			{
 				bool isWinter = true;
-				// Kontrollerar om alla 5 dagar i sekvensen är 0 grader eller kallare.
 				for (int j = 0; j < 5; j++)
 				{
 					if (dailyTemps[i + j].AvgTemp > 0.0)
@@ -143,71 +139,82 @@ namespace Core
 						break;
 					}
 				}
-				if (isWinter) return dailyTemps[i].Date;
+				if (isWinter) return dailyTemps[i].Date; // Returnerar startdatumet för vintern.
 			}
 			return null;
 		}
 
-		// --- VG-METODER ---
+		// --- VG-NIVÅ: EXTRA ANALYSER ---
 
+		// Beräknar hur länge balkongdörren varit öppen per dag baserat på temperaturförändringar.
 		public List<(DateTime Date, int TotalMinutes)> CalculateBalconyOpenTime(List<WeatherData> weatherData)
 		{
-			// Skapar dictionaries för snabbare uppslagning av data per tidpunkt.
-			var inneData = weatherData.Where(w => w.Plats == "Inne").ToDictionary(w => w.Datum);
-			var uteData = weatherData.Where(w => w.Plats == "Ute").ToDictionary(w => w.Datum);
+			// Delar upp data i Inne/Ute och hanterar eventuella dubbletter genom att ta första värdet per tidpunkt.
+			var inneData = weatherData
+				.Where(w => w.Plats == "Inne")
+				.GroupBy(w => w.Datum)
+				.ToDictionary(g => g.Key, g => g.First());
+
+			var uteData = weatherData
+				.Where(w => w.Plats == "Ute")
+				.GroupBy(w => w.Datum)
+				.ToDictionary(g => g.Key, g => g.First());
 
 			var timestamps = inneData.Keys.OrderBy(t => t).ToList();
 			var openDoorMinutesPerDay = new Dictionary<DateTime, int>();
 
-			// Loopar igenom tidpunkterna och jämför varje mätning med den föregående.
+			// Jämför temperaturförändringen mellan varje mätpunkt i tidsföljd.
 			for (int i = 1; i < timestamps.Count; i++)
 			{
 				var currentTime = timestamps[i];
 				var prevTime = timestamps[i - 1];
 
-				// Ignorerar luckor i datan som är större än 15 minuter.
+				// Ignorerar om det är en lucka i datan (> 15 minuter).
 				if ((currentTime - prevTime).TotalMinutes > 15) continue;
 
+				// Kräver att data finns för både inne och ute vid båda tidpunkterna.
 				if (inneData.ContainsKey(currentTime) && inneData.ContainsKey(prevTime) &&
 					uteData.ContainsKey(currentTime) && uteData.ContainsKey(prevTime))
 				{
 					double inneDelta = inneData[currentTime].Temp - inneData[prevTime].Temp;
 					double uteDelta = uteData[currentTime].Temp - uteData[prevTime].Temp;
 
-					// Detekterar "Balkong-mönster": Innertemp sjunker samtidigt som utetemp stiger.
+					// Logik: Om innertemp sjunker OCH utetemp stiger, antas dörren ha öppnats.
 					if (inneDelta < 0 && uteDelta > 0)
 					{
 						var day = currentTime.Date;
 						if (!openDoorMinutesPerDay.ContainsKey(day))
 							openDoorMinutesPerDay[day] = 0;
 
-						// Adderar tidsintervallet till dagens total.
+						// Adderar tiden (minuter) till dagens total.
 						openDoorMinutesPerDay[day] += (int)(currentTime - prevTime).TotalMinutes;
 					}
 				}
 			}
 
+			// Returnerar resultatet sorterat med flest "öppna minuter" först.
 			return openDoorMinutesPerDay
 				.Select(kvp => (kvp.Key, kvp.Value))
 				.OrderByDescending(x => x.Value)
 				.ToList();
 		}
 
+		// Sorterar dagar baserat på skillnaden mellan inomhus- och utomhustemperatur.
 		public List<(DateTime Date, double AvgDiff)> SortDaysByTempDifference(List<WeatherData> weatherData)
 		{
 			var inneData = weatherData.Where(w => w.Plats == "Inne");
 			var uteData = weatherData.Where(w => w.Plats == "Ute");
 
-			// Slår ihop (joinar) inne- och utedata baserat på datum för att kunna jämföra.
+			// Matchar ihop inne- och utedata på datum/tid.
 			var query = from inne in inneData
 						join ute in uteData on inne.Datum equals ute.Datum
 						select new
 						{
 							inne.Datum,
-							Diff = Math.Abs(inne.Temp - ute.Temp) // Beräknar absolut skillnad.
+							Diff = Math.Abs(inne.Temp - ute.Temp) // Beräknar absolut skillnad
 						};
 
-			// Grupperar diffarna per dag och tar fram snittet.
+			// Grupperar skillnaderna per dag och beräknar dygnsmedelvärdet av skillnaden.
 			return query
 				.GroupBy(x => x.Datum.Date)
 				.Select(g => new
@@ -215,7 +222,7 @@ namespace Core
 					Date = g.Key,
 					AvgDiff = g.Average(x => x.Diff)
 				})
-				.OrderByDescending(x => x.AvgDiff) // Sorterar störst skillnad först.
+				.OrderByDescending(x => x.AvgDiff) // Sorterar störst skillnad först
 				.Select(x => (x.Date, x.AvgDiff))
 				.ToList();
 		}
