@@ -11,7 +11,7 @@ To run this program, you need Visual Studio with .NET installed.
 * SQL Server LocalDB (usually included with Visual Studio)
 
 ### Installation and Usage
-1.  Open the file `VaderDataProjekt.sln` in Visual Studio.
+1.  Open the file `WeatherAppProject.sln` in Visual Studio.
 2.  Ensure that the file `TempFuktData.csv` is located in the **UI** folder.
 3.  Set the **UI** project as the "Startup Project".
 4.  Press **Start** (or F5).
